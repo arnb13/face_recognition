@@ -148,7 +148,7 @@ This project is licensed under the MIT License.
 
 ## Developer
 
-**Nafis Arnob**
+**Nafis Hasrat Arnob**
 Flutter Developer
 
 GitHub: https://github.com/arnb13
