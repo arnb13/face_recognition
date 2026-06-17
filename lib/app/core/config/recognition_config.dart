@@ -1,3 +1,5 @@
+import 'package:face_recognition_engine/face_recognition_engine.dart'
+    show RecognitionConfig;
 import 'package:shared_value/shared_value.dart';
 
 /// Centralised, user-tweakable configuration for face recognition and the
@@ -5,60 +7,38 @@ import 'package:shared_value/shared_value.dart';
 /// [SharedValue] (same mechanism as the enrolled face templates) so changes made on the
 /// config page survive app restarts.
 ///
-/// Defaults live in [RecognitionDefaults]; the live config values below are
-/// seeded with those defaults and overwritten from disk by
-/// [loadRecognitionConfig].
+/// Defaults are sourced from the face_recognition_engine package's
+/// [RecognitionConfig] so the app and the package never drift apart. The live
+/// config values below are seeded with those defaults and overwritten from disk
+/// by [loadRecognitionConfig].
 class RecognitionDefaults {
   RecognitionDefaults._();
 
+  /// Single source of truth: the package's compile-time defaults.
+  static const RecognitionConfig _pkg = RecognitionConfig();
+
   // Recognition
-  static const double matchThreshold = 0.8;
+  static double get matchThreshold => _pkg.matchThreshold;
 
   // Enrollment (guided multi-angle capture)
-  /// Number of angle samples to capture during guided enrollment. Defaults to
-  /// 3 (front, right, left) which rely only on yaw (`headEulerAngleY`) and are
-  /// available on all devices; samples 4-5 add up/down, which need pitch
-  /// (`headEulerAngleX`) support.
-  static const int enrollSamples = 3;
-
-  /// Minimum face width as a fraction of the frame width, used as a quality
-  /// gate so distant/tiny faces are not captured or matched.
-  static const double minFaceWidthFraction = 0.18;
+  static int get enrollSamples => _pkg.enrollSamples;
+  static double get minFaceWidthFraction => _pkg.minFaceWidthFraction;
 
   // Liveness / anti-spoofing
-  static const bool livenessEnabled = true;
-
-  /// When true, one challenge is chosen at random per attempt from the enabled
-  /// pool (instead of requiring all enabled challenges).
-  static const bool randomizeLiveness = true;
-
-  static const bool requireBlink = true;
-  static const bool requireHeadTurn = false;
-  static const bool requireSmile = true;
-
-  /// `eyeOpenProbability` at or below this counts the eye as closed.
-  static const double eyeClosedThreshold = 0.35;
-
-  /// `eyeOpenProbability` at or above this counts the eye as open.
-  static const double eyeOpenThreshold = 0.65;
-
-  /// Absolute head yaw (`headEulerAngleY`, degrees) needed for a head turn.
-  static const double headTurnThreshold = 20.0;
-
-  /// `smilingProbability` at or above this counts as a smile.
-  static const double smileThreshold = 0.7;
-
-  /// Seconds allowed to complete all liveness challenges before failing.
-  static const int livenessTimeoutSec = 20;
+  static bool get livenessEnabled => _pkg.livenessEnabled;
+  static bool get randomizeLiveness => _pkg.randomizeLiveness;
+  static bool get requireBlink => _pkg.requireBlink;
+  static bool get requireHeadTurn => _pkg.requireHeadTurn;
+  static bool get requireSmile => _pkg.requireSmile;
+  static double get eyeClosedThreshold => _pkg.eyeClosedThreshold;
+  static double get eyeOpenThreshold => _pkg.eyeOpenThreshold;
+  static double get headTurnThreshold => _pkg.headTurnThreshold;
+  static double get smileThreshold => _pkg.smileThreshold;
+  static int get livenessTimeoutSec => _pkg.livenessTimeoutSec;
 
   // Passive (texture/CNN) anti-spoofing
-  /// Off by default: requires a trained model at `asset/antispoof.tflite`
-  /// (see `SpoofDetector`) to be present.
-  static const bool passiveSpoofEnabled = false;
-
-  /// Minimum P(live) from the texture model to accept the frame as a real
-  /// face. Higher = stricter.
-  static const double spoofLiveThreshold = 0.5;
+  static bool get passiveSpoofEnabled => _pkg.passiveSpoofEnabled;
+  static double get spoofLiveThreshold => _pkg.spoofLiveThreshold;
 }
 
 // ---- Persisted, live configuration values ---------------------------------
@@ -182,3 +162,24 @@ Future<void> resetRecognitionConfig() async {
   cfgSpoofLiveThreshold.$ = RecognitionDefaults.spoofLiveThreshold;
   await Future.wait(_allConfigValues.map((v) => v.save()));
 }
+
+/// Snapshots the current persisted [SharedValue] config into an immutable
+/// [RecognitionConfig] for the face_recognition_engine package's camera flows
+/// (`FaceRecognitionKit.enroll` / `.detect`). Call after [loadRecognitionConfig].
+RecognitionConfig currentRecognitionConfig() => RecognitionConfig(
+      matchThreshold: cfgMatchThreshold.$,
+      enrollSamples: cfgEnrollSamples.$,
+      minFaceWidthFraction: cfgMinFaceWidthFraction.$,
+      livenessEnabled: cfgLivenessEnabled.$,
+      randomizeLiveness: cfgRandomizeLiveness.$,
+      requireBlink: cfgRequireBlink.$,
+      requireHeadTurn: cfgRequireHeadTurn.$,
+      requireSmile: cfgRequireSmile.$,
+      eyeClosedThreshold: cfgEyeClosedThreshold.$,
+      eyeOpenThreshold: cfgEyeOpenThreshold.$,
+      headTurnThreshold: cfgHeadTurnThreshold.$,
+      smileThreshold: cfgSmileThreshold.$,
+      livenessTimeoutSec: cfgLivenessTimeoutSec.$,
+      passiveSpoofEnabled: cfgPassiveSpoofEnabled.$,
+      spoofLiveThreshold: cfgSpoofLiveThreshold.$,
+    );

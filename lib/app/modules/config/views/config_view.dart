@@ -25,6 +25,26 @@ class ConfigView extends GetView<ConfigController> {
             fontWeight: FontWeight.bold,
           ),
         ),
+        actions: [
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.primaryColor,
+            ),
+            icon: const Icon(Icons.restart_alt, size: 20),
+            label: const Text('Defaults'),
+            onPressed: () async {
+              await controller.resetToDefaults();
+              Get.snackbar(
+                'Defaults restored',
+                'All settings were reset to their default values. '
+                    'Tap Save to keep them.',
+                snackPosition: SnackPosition.BOTTOM,
+                margin: const EdgeInsets.all(12),
+              );
+            },
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: Obx(
         () => ListView(
@@ -215,56 +235,27 @@ class ConfigView extends GetView<ConfigController> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.onSurface,
-                    side: const BorderSide(color: AppColors.surfaceVariant),
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                  icon: const Icon(Icons.restart_alt),
-                  label: const Text('Defaults'),
-                  onPressed: () async {
-                    await controller.resetToDefaults();
-                    Get.snackbar(
-                      'Defaults restored',
-                      'All settings were reset to their default values. '
-                          'Tap Save to keep them.',
-                      snackPosition: SnackPosition.BOTTOM,
-                      margin: const EdgeInsets.all(12),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryColor,
-                    foregroundColor: AppColors.white,
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                  icon: const Icon(Icons.save),
-                  label: const Text('Save settings'),
-                  onPressed: () async {
-                    await controller.save();
-                    Get.back();
-                    Get.snackbar(
-                      'Settings saved',
-                      'New settings apply to the next recognition session.',
-                      snackPosition: SnackPosition.BOTTOM,
-                      backgroundColor: Colors.green.shade100,
-                      colorText: Colors.green.shade900,
-                      icon: const Icon(Icons.check_circle, color: Colors.green),
-                      margin: const EdgeInsets.all(12),
-                    );
-                  },
-                ),
-              ),
-            ],
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryColor,
+              foregroundColor: AppColors.white,
+              minimumSize: const Size.fromHeight(48),
+            ),
+            icon: const Icon(Icons.save),
+            label: const Text('Save settings'),
+            onPressed: () async {
+              await controller.save();
+              Get.back();
+              Get.snackbar(
+                'Settings saved',
+                'New settings apply to the next recognition session.',
+                snackPosition: SnackPosition.BOTTOM,
+                backgroundColor: Colors.green.shade100,
+                colorText: Colors.green.shade900,
+                icon: const Icon(Icons.check_circle, color: Colors.green),
+                margin: const EdgeInsets.all(12),
+              );
+            },
           ),
         ),
       ),

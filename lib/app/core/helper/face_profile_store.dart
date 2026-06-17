@@ -1,51 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:face_recognition_engine/face_recognition_engine.dart'
+    show FaceProfile, FaceRecognitionUtil;
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_value/shared_value.dart';
 
-import 'face_recognition_util.dart';
-
-/// One enrolled person: a name, a saved face photo and one or more angle
-/// embeddings ("templates") used for matching.
-class FaceProfile {
-  final String id;
-  final String name;
-
-  /// Absolute path to the saved JPEG face photo (may be empty).
-  final String photoPath;
-
-  /// Multi-angle embeddings for this person.
-  final List<List<double>> templates;
-
-  const FaceProfile({
-    required this.id,
-    required this.name,
-    required this.photoPath,
-    required this.templates,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'photoPath': photoPath,
-        'templates': templates,
-      };
-
-  factory FaceProfile.fromJson(Map<String, dynamic> json) {
-    final rawTemplates = (json['templates'] as List?) ?? const [];
-    return FaceProfile(
-      id: json['id'] as String,
-      name: (json['name'] as String?) ?? 'Unknown',
-      photoPath: (json['photoPath'] as String?) ?? '',
-      templates: rawTemplates
-          .map<List<double>>((e) =>
-              (e as List).map<double>((n) => (n as num).toDouble()).toList())
-          .toList(),
-    );
-  }
-}
+// The [FaceProfile] model now lives in the face_recognition_engine package;
+// re-export it so the many app files that import this store keep compiling
+// unchanged.
+export 'package:face_recognition_engine/face_recognition_engine.dart'
+    show FaceProfile;
 
 /// Persisted store of enrolled [FaceProfile]s. Saved as a JSON string (rather
 /// than a typed `SharedValue`) because the package's `deserialize` would throw
