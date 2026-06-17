@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:face_recognition/app/core/config/recognition_config.dart';
 import 'package:face_recognition/app/core/helper/app_helper.dart';
+import 'package:face_recognition/app/core/helper/face_profile_store.dart';
 import 'package:face_recognition/app/core/helper/print_log.dart';
-import 'package:face_recognition/app/core/helper/shared_value_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:get/get.dart';
@@ -11,6 +12,7 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
+import '../views/face_enrollment_view.dart';
 import '../views/face_preview_dialog.dart';
 import '../views/live_recognition_view.dart';
 
@@ -20,6 +22,9 @@ class HomeController extends GetxController {
   final ImagePicker imagePicker = ImagePicker();
   RxString imagePath = ''.obs;
 
+  /// Enrolled people, reflected on the home screen.
+  final profiles = <FaceProfile>[].obs;
+
   // Detected face details for the captured image.
   Rect? faceRect;
   int imageWidth = 0;
@@ -28,13 +33,53 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    faceEmbedding.load();
+    _loadState();
+  }
+
+  Future<void> _loadState() async {
+    await Future.wait([FaceProfileStore.load(), loadRecognitionConfig()]);
+    _refreshProfiles();
+  }
+
+  void _refreshProfiles() => profiles.assignAll(FaceProfileStore.all);
+
+  /// Opens the guided multi-angle enrollment flow and refreshes the list when
+  /// a new person is enrolled.
+  void startEnrollment() async {
+    final result = await Get.to(() => const FaceEnrollmentView());
+    if (result == true) {
+      _refreshProfiles();
+    }
+  }
+
+  /// Removes a single enrolled person (and their photo).
+  void removeProfile(FaceProfile profile) async {
+    await FaceProfileStore.removeById(profile.id);
+    _refreshProfiles();
+    Get.snackbar(
+      'Removed',
+      '${profile.name} has been removed.',
+      snackPosition: SnackPosition.BOTTOM,
+      margin: const EdgeInsets.all(12),
+    );
+  }
+
+  /// Removes every enrolled person.
+  void clearAll() async {
+    await FaceProfileStore.clear();
+    _refreshProfiles();
+    Get.snackbar(
+      'Cleared',
+      'All enrolled people have been removed.',
+      snackPosition: SnackPosition.BOTTOM,
+      margin: const EdgeInsets.all(12),
+    );
   }
 
 
-  final faceDetector = FaceDetector(options: FaceDetectorOptions(
-    performanceMode: FaceDetectorMode.fast,
-  ));
+  FaceDetector faceDetector = FaceDetector(
+    options: FaceDetectorOptions(performanceMode: FaceDetectorMode.fast),
+  );
 
 
   void pickImage () async {
@@ -61,11 +106,10 @@ class HomeController extends GetxController {
   /// Opens the live recognition screen, warning the user if no reference
   /// face has been enrolled yet.
   void startLiveRecognition() {
-    if (faceEmbedding.$.isEmpty) {
+    if (FaceProfileStore.isEmpty) {
       Get.snackbar(
         'No face enrolled',
-        'Please capture and confirm a face first before starting '
-            'live recognition.',
+        'Please enroll a face first before starting live recognition.',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.orange.shade100,
         colorText: Colors.orange.shade900,
@@ -79,25 +123,48 @@ class HomeController extends GetxController {
 
   /// Detects the face in the captured image and stores its bounding box
   /// along with the image dimensions. Returns true if a face was found.
+  /// Detection failures (e.g. a transient ML Kit error) are caught so they
+  /// surface as a retry prompt instead of crashing the app.
   Future<bool> detectFace() async {
-    final inputImage = InputImage.fromFilePath(imagePath.value);
+    // ML Kit can throw a transient NullPointerException on its first
+    // invocation (more common on release builds); recreate the detector and
+    // retry once before giving up.
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final inputImage = InputImage.fromFilePath(imagePath.value);
+        final faces = await faceDetector.processImage(inputImage);
 
-    final faces = await faceDetector.processImage(inputImage);
+        if (faces.isEmpty) {
+          printLog("No face found");
+          faceRect = null;
+          return false;
+        }
 
-    if (faces.isEmpty) {
-      print("No face found");
-      faceRect = null;
-      return false;
+        faceRect = faces.first.boundingBox;
+
+        final bytes = File(imagePath.value).readAsBytesSync();
+        final img.Image original = img.decodeImage(bytes)!;
+        imageWidth = original.width;
+        imageHeight = original.height;
+
+        return true;
+      } catch (e) {
+        printLog('Face detection attempt $attempt failed: $e');
+        faceRect = null;
+        if (attempt == 1) {
+          try {
+            await faceDetector.close();
+          } catch (_) {}
+          faceDetector = FaceDetector(
+            options: FaceDetectorOptions(
+              performanceMode: FaceDetectorMode.fast,
+            ),
+          );
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
+      }
     }
-
-    faceRect = faces.first.boundingBox;
-
-    final bytes = File(imagePath.value).readAsBytesSync();
-    final img.Image original = img.decodeImage(bytes)!;
-    imageWidth = original.width;
-    imageHeight = original.height;
-
-    return true;
+    return false;
   }
 
   void _showFacePreviewDialog() {
@@ -120,11 +187,14 @@ class HomeController extends GetxController {
     );
   }
 
-  /// Crops the confirmed face and computes its embedding.
+  /// Crops the confirmed face, computes its embedding, asks for a name and
+  /// saves it as a new enrolled person (single-angle "quick enroll").
   Future<void> extractEmbedding() async {
     if (faceRect == null) return;
 
     AppHelper().showLoader();
+    List<double> embedding;
+    img.Image photo;
     try {
       final bytes = File(imagePath.value).readAsBytesSync();
       img.Image original = img.decodeImage(bytes)!;
@@ -145,22 +215,88 @@ class HomeController extends GetxController {
         height: height,
       );
 
-      img.Image resized = img.copyResize(
-        croppedFace,
-        width: 112,
-        height: 112,
-      );
-
+      img.Image resized = img.copyResize(croppedFace, width: 112, height: 112);
       Float32List input = imageToByteListFloat32(resized);
-
-      List<double> embedding = await getEmbedding(input);
-
+      embedding = await getEmbedding(input);
+      photo = img.copyResize(croppedFace, width: 240, height: 240);
       printLog(embedding);
+    } catch (e) {
+      AppHelper().hideLoader();
+      Get.snackbar(
+        'Error',
+        'Failed to read face: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.shade100,
+        colorText: Colors.red.shade900,
+        margin: const EdgeInsets.all(12),
+      );
+      return;
+    }
+    AppHelper().hideLoader();
 
+    // If this face is already enrolled, update that person instead of adding a
+    // duplicate.
+    final existing =
+        FaceProfileStore.findDuplicate([embedding], cfgMatchThreshold.$);
+    if (existing != null) {
+      AppHelper().showLoader();
+      try {
+        String? photoPath;
+        try {
+          photoPath = await FaceProfileStore.savePhoto(photo, existing.id);
+        } catch (_) {}
+        final updated = await FaceProfileStore.mergeInto(
+          existing,
+          newTemplates: [embedding],
+          photoPath: photoPath,
+        );
+        _refreshProfiles();
+        AppHelper().hideLoader();
+        Get.snackbar(
+          'Updated',
+          '${updated.name} is already enrolled — updated their face '
+              '(${updated.templates.length} samples).',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green.shade100,
+          colorText: Colors.green.shade900,
+          icon: const Icon(Icons.check_circle, color: Colors.green),
+          margin: const EdgeInsets.all(12),
+        );
+      } catch (e) {
+        AppHelper().hideLoader();
+        Get.snackbar(
+          'Error',
+          'Failed to update: $e',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red.shade100,
+          colorText: Colors.red.shade900,
+          margin: const EdgeInsets.all(12),
+        );
+      }
+      return;
+    }
+
+    final name = await _promptName();
+    if (name == null) return; // cancelled
+
+    AppHelper().showLoader();
+    try {
+      final id = DateTime.now().millisecondsSinceEpoch.toString();
+      String photoPath = '';
+      try {
+        photoPath = await FaceProfileStore.savePhoto(photo, id);
+      } catch (_) {}
+      await FaceProfileStore.add(FaceProfile(
+        id: id,
+        name: name,
+        photoPath: photoPath,
+        templates: [embedding],
+      ));
+      _refreshProfiles();
       AppHelper().hideLoader();
       Get.snackbar(
         'Face saved',
-        'Face embedding saved successfully. You can now use live recognition.',
+        '$name enrolled. You can now use live recognition.',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.green.shade100,
         colorText: Colors.green.shade900,
@@ -171,13 +307,47 @@ class HomeController extends GetxController {
       AppHelper().hideLoader();
       Get.snackbar(
         'Error',
-        'Failed to save face embedding: $e',
+        'Failed to save: $e',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red.shade100,
         colorText: Colors.red.shade900,
         margin: const EdgeInsets.all(12),
       );
     }
+  }
+
+  /// Prompts for a person's name. Returns the trimmed name (empty → "Person")
+  /// or null if cancelled.
+  Future<String?> _promptName() {
+    final textController = TextEditingController();
+    return Get.dialog<String?>(
+      AlertDialog(
+        title: const Text('Name this person'),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Name',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: null),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Get.back(
+              result: textController.text.trim().isEmpty
+                  ? 'Person'
+                  : textController.text.trim(),
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+      barrierDismissible: false,
+    );
   }
 
 
@@ -214,8 +384,6 @@ class HomeController extends GetxController {
 
 
     interpreter.close();
-    faceEmbedding.$ = embedding;
-    faceEmbedding.save();
     return embedding;
   }
 

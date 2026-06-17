@@ -30,6 +30,13 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Apply the ML Kit / TFLite keep rules. If code shrinking is enabled
+            // these rules prevent R8 from stripping the native ML Kit classes
+            // (which breaks face detection in release).
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

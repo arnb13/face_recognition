@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 class Assets {
   Assets._();
 
+  static const AssetGenImage logo = AssetGenImage('asset/logo.png');
   static const String mobilefacenet = 'asset/mobilefacenet.tflite';
 }
 

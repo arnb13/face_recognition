@@ -5,12 +5,6 @@ final SharedValue<bool> isLoggedIn = SharedValue(
   key: "isLoggedIn",
 );
 
-final SharedValue<List<double>> faceEmbedding = SharedValue(
-  value: [],
-  key: "faceEmbedding",
-);
-
-
 final SharedValue<String> accessToken = SharedValue(
   value: "",
   key: "accessToken",

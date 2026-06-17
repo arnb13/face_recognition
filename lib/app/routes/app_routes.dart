@@ -8,6 +8,7 @@ abstract class Routes {
   static const USER_ATTENDANCE_LIST = _Paths.USER_ATTENDANCE_LIST;
   static const ALL_ATTENDANCE = _Paths.ALL_ATTENDANCE;
   static const LEAVE = _Paths.LEAVE;
+  static const CONFIG = _Paths.CONFIG;
 }
 
 abstract class _Paths {
@@ -18,4 +19,5 @@ abstract class _Paths {
   static const USER_ATTENDANCE_LIST = '/user-attendance-list';
   static const ALL_ATTENDANCE = '/all-attendance';
   static const LEAVE = '/leave';
+  static const CONFIG = '/config';
 }
