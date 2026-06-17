@@ -228,11 +228,10 @@ packages:
   face_recognition_engine:
     dependency: "direct main"
     description:
-      path: "."
-      ref: HEAD
-      resolved-ref: "36714b8bed5fcbe16fd705f02986aaee56112da8"
-      url: "https://github.com/arnb13/face_recognition_engine.git"
-    source: git
+      name: face_recognition_engine
+      sha256: aa83a96cbb94d018de1ea6101872ae2408c0e0330b02a0397c5f34b459b6cd5a
+      url: "https://pub.dev"
+    source: hosted
     version: "1.0.0"
   fake_async:
     dependency: transitive
